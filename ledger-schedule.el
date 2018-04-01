@@ -247,6 +247,12 @@ YEAR-DESC, MONT-DESC, and DAY-DESC are the string portions of the
 date descriptor."
   (cond ((string= day-desc "*")
          t)
+        ((string= "$" day-desc)   ;; end of month
+         (let ((days-in-month (cl-gensym))
+               (decoded (cl-gensym)))
+           `(let* ((,decoded (decode-time date))
+                   (,days-in-month (ledger-schedule-days-in-month (nth 4 ,decoded) (nth 5 ,decoded))))
+              (= (nth 3 ,decoded) ,days-in-month))))
         ((string-match "[A-Za-z]" day-desc)  ;; There is something other than digits and commas
          (ledger-schedule-parse-complex-date year-desc month-desc day-desc))
         ((/= 0 (string-to-number day-desc))
@@ -285,14 +291,21 @@ date descriptor."
                    (setq items (append items (list (list test-date (cadr candidate))))))))
     items))
 
+(defun ledger-schedule-format-candidate(date candidate-text)
+  (format-time-string candidate-text date))
+
 (defun ledger-schedule-create-auto-buffer (candidate-items early horizon)
   "Format CANDIDATE-ITEMS for display."
   (let ((candidates (ledger-schedule-list-upcoming-xacts candidate-items early horizon))
-        (schedule-buf (get-buffer-create ledger-schedule-buffer-name)))
+        (schedule-buf (get-buffer-create ledger-schedule-buffer-name))
+        (date-format (or (cdr (assoc "date-format" ledger-environment-alist))
+                         ledger-default-date-format)))
     (with-current-buffer schedule-buf
       (erase-buffer)
       (dolist (candidate candidates)
-        (insert (ledger-format-date (car candidate) ) " " (cadr candidate) "\n"))
+        (insert (ledger-format-date (car candidate) ) " "
+                (ledger-schedule-format-candidate (car candidate) (cadr candidate))
+		"\n"))
       (ledger-mode))
     (length candidates)))
 
